@@ -187,7 +187,7 @@ class GoogleSheetsPuppeteerRPA {
 
     Logger.log("Copied Data:", copiedData);
 
-    await this.copytoPostgres(copiedData);
+    // await this.copytoPostgres(copiedData);
 
     // Switch the sheet
     await page.keyboard.down("Shift");
@@ -203,11 +203,11 @@ class GoogleSheetsPuppeteerRPA {
 
   async copytoPostgres(data) {
     const pool = new Pool({
-      user: "postgres",
-      host: "localhost",
-      database: "sheet_data",
+      user: config.PGUSER,
+      host: config.PGHOST,
+      database: config.DATABASE,
       password: config.PGPASSWORD,
-      port: 5432,
+      port: config.PGPORT,
     });
     const header = data.split("\n")[0].split("\t");
 
