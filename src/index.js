@@ -10,9 +10,12 @@ puppeteer.use(AnonymizeUAPlugin());
 import AdblockerPlugin from "puppeteer-extra-plugin-adblocker";
 puppeteer.use(AdblockerPlugin({ blockTrackers: true }));
 import dotenv from "dotenv";
+import pg from "pg";
+const { Pool } = pg;
 
-import Logger from '@actuals_assignment/logger'
-import cred from './config/config'
+import Logger from "@actuals_assignment/logger";
+import cred from "./config/config.js";
+import config from "./config/config.js";
 
 dotenv.config();
 
@@ -93,7 +96,7 @@ class GoogleSheetsPuppeteerRPA {
       ]);
 
       // for 2FA if enabled
-      await new Promise(resolve => setTimeout(resolve, 10000));
+      await new Promise((resolve) => setTimeout(resolve, 10000));
 
       Logger.log("Successfully logged into Google");
     } catch (error) {
@@ -131,21 +134,18 @@ class GoogleSheetsPuppeteerRPA {
 
       // Navigate to the spreadsheet
       Logger.log("Navigating to spreadsheet...");
-      await page.goto(this.spreadsheetUrl)
+      await page.goto(this.spreadsheetUrl);
       Logger.log("Copying data between sheets...");
       await this.performSheetOperations(page);
       Logger.log("Data copied successfully between sheets");
 
       // Logout from Google
-      await this.logoutFromGoogle(page)
-
+      await this.logoutFromGoogle(page).then(async () => {
+        await browser.close();
+      });
     } catch (error) {
       Logger.error("Error in copyBetweenSheets:", error);
       throw error;
-    } finally {
-      if (browser) {
-        await browser.close();
-      }
     }
   }
   async logoutFromGoogle(page) {
@@ -156,9 +156,7 @@ class GoogleSheetsPuppeteerRPA {
         waitUntil: "networkidle0",
       });
 
-      const signOutButton = await page.waitForSelector(
-        'button.sign-out',
-      );
+      const signOutButton = await page.waitForSelector("button.sign-out");
       await signOutButton.click();
 
       await page.waitForNavigation({ waitUntil: "networkidle0" });
@@ -189,6 +187,8 @@ class GoogleSheetsPuppeteerRPA {
 
     Logger.log("Copied Data:", copiedData);
 
+    await this.copytoPostgres(copiedData);
+
     // Switch the sheet
     await page.keyboard.down("Shift");
     await page.keyboard.press("F11");
@@ -200,9 +200,51 @@ class GoogleSheetsPuppeteerRPA {
     await page.keyboard.up("Control");
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
-}
 
+  async copytoPostgres(data) {
+    const pool = new Pool({
+      user: "postgres",
+      host: "localhost",
+      database: "sheet_data",
+      password: config.PGPASSWORD,
+      port: 5432,
+    });
+    const header = data.split("\n")[0].split("\t");
+
+    const dataRows = data.split("\n");
+    const dataArray = dataRows.map((row, index) => {
+      if (index === 0) return;
+      return row.split("\t");
+    });
+    const headerForInitialization = header
+      .map((head) => {
+        return head.toLowerCase() + " TEXT";
+      })
+      .join(", ");
+
+    const createTableQuery = `
+                CREATE TABLE IF NOT EXISTS sheet_data (
+                    id SERIAL PRIMARY KEY,
+                    ${headerForInitialization},
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            `;
+    await pool.query(createTableQuery);
+    const headerForInsertion = header.join(", ");
+    for (let i = 1; i < dataArray.length; i++) {
+      const row = dataArray[i];
+      const values = row.map((value) =>
+        typeof value === "string" ? value.replace(/'/g, "''") : value
+      );
+
+      const insertQuery = `
+                    INSERT INTO sheet_data (${headerForInsertion})
+                    VALUES (${values.map((v) => `'${v}'`).join(",")})
+                `;
+      await pool.query(insertQuery);
+    }
+  }
+}
 
 const rpa = new GoogleSheetsPuppeteerRPA();
 rpa.copyBetweenSheets();
-

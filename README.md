@@ -20,6 +20,15 @@
 3. **Data Operations:** Selects, copies, switches sheets, and pastes data.
 4. **Logout:** Logs out from the Google account when done.  
 
+## Why Puppeter
+
+1. **Easy to Use:** Simple API for automation.
+2. **Good Documentation:** Clear guides and examples.
+3. **Automate Tasks:** Click buttons, fill forms, navigate pages.
+6. **Screenshots & PDFs:** Easily capture page content.
+7. **Time-Saving:** Faster and fewer errors than manual work.
+
+
 ## Setup:
 1. Clone this repository.
 2. Install dependencies using `npm install`.
